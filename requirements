@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+sqlalchemy
+pypdf
+openpyxl
+pg8000
+psycopg2-binary
