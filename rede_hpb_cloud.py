@@ -1783,7 +1783,7 @@ if "hpb_logged_in" not in st.session_state:
     st.session_state.hpb_logged_in = False
 
 if not st.session_state.hpb_logged_in:
-    st.title("Rede HPB — Plataforma Clínica, Biobanco, Qualidade e Governança")
+    st.title("Rede HPB")
     st.caption(
         "Acesso Institucional Vinculado ao Domínio Google Workspace @ufpe.br | Centros: HC-UFPE, HUOC-UPE e HCP"
     )
