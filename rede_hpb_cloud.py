@@ -653,7 +653,7 @@ if "db_hpb_v5_initialized" not in st.session_state:
     _seed_membro("bioinfo.hpb", "Bioinformata Rede HPB / NUPIT", "Bio@HPB2026", "bioinformatica.hpb@ufpe.br", "(81) 2126-8588", "Bioinformata")
     _seed_membro("agenda_hpb", "Coordenação de Agenda Cirúrgica Rede HPB", "Agenda@HPB2026", "agenda.hpb@ufpe.br", "(81) 2126-8588", "Agenda_HPB")
     _seed_membro("claudio.cordeiro", "Cláudio Leandro Cordeiro da Silva Junior", "Rede@HPB2026", "claudio.cjunior@ufpe.br "(81) 99882-7297", "Bioinformata")
-    _seed_membro("jessica.winely", "Jéssica Winely Batista da Silva", "Rede@HPB2026", "jessica.winely@ufpe.br", "(81) 98166-0726", "Coletor")
+    _seed_membro("jessica.winely", "Jéssica Winely Batista da Silva", "Rede@HPB2026", "jessica.winely@ufpe.br", "(81) 98166-0726", "Controle_Qualidade")
     _seed_membro("barbara.andrade", "Bárbara Fernanda Pessoa de Andrade", "Rede@HPB2026", "barbara.andrade@ufpe.br", "(81) 98956-9873", "Coletor")
     _seed_membro("cecilia.silva", "Cecília Evellyn da Silva", "Rede@HPB2026", "cecilia.evellyn@ufpe.br", "(81) 99801-0673", "Coletor")
     _seed_membro("matheus.conceicao", "Matheus Ítalo da Conceição", "Rede@HPB2026", "matheus.italo@ufpe.br", "(81) 98583-2402", "Coletor")
@@ -1443,7 +1443,7 @@ def gerar_pdf_preenchido_exemplo_hpb(id_hpb: str = "97HPB") -> bytes:
         "0 -16 Td (1. Coleta de sangue realizada? (1) Sim   Volume Sangue: 26.0 mL   Caracteristica: (1) Normal) Tj",
         "0 -16 Td (2. Coleta de Tumor realizada? (1) Sim   Peso Biopsia: 42.0 mg   Total aliquotas: 7) Tj",
         "0 -16 Td (2. Local da coleta: Bloco Cirurgico HC-UFPE - Cidade Universitaria - Recife/PE) Tj",
-        "0 -16 Td (3. Data da coleta: 11/11/2026   4. Hora: 08:45   8. Responsavel pela coleta: claudio.montenegro) Tj",
+        "0 -16 Td (3. Data da coleta: 11/11/2026   4. Hora: 08:45   8. Responsavel pela coleta: claudio.cordeiro) Tj",
         "0 -16 Td (10. Temperatura no momento do armazenamento: Max.: 6.5 C   Min.: 2.5 C   Atual: 4.0 C) Tj",
         "0 -16 Td (TCLE HC-UFPE - REDE INTERNACIONAL DE PESQUISA PARA CANCER HEPATO-PANCREATO BILIAR) Tj",
         "0 -16 Td (Eu, MARIA DE LOURDES DA SILVA, CPF: 123.456.789-00, abaixo assinado, concordo em participar.) Tj",
@@ -1832,7 +1832,7 @@ if not st.session_state.hpb_logged_in:
                 "- **Pesquisadora / Coordenação (Valécia):** `valecia.costa@ufpe.br` (ou `valecia.costa`) | senha `Rede@HPB2026`\n"
                 "- **Controle de Qualidade (2ª Checagem, Agilidade e Viabilidade):** `qualidade.hpb@ufpe.br` (ou `qualidade.hpb`) | senha `Quali@HPB2026`\n"
                 "- **Bioinformata (Consulta Completa Clínico-Genômica):** `bioinformatica.hpb@ufpe.br` (ou `bioinfo.hpb`) | senha `Bio@HPB2026`\n"
-                "- **Coletores (Interface Minimalista Semanal):** `claudio.montenegro@ufpe.br`, `adriano.carneiro@ufpe.br`, `jessica.winely@ufpe.br`, `amanda.albuquerque@ufpe.br` | senha `Rede@HPB2026`\n"
+                "- **Coletores (Interface Minimalista Semanal):** `jessica.winely@ufpe.br`| senha `Rede@HPB2026`\n"
                 "- **Processadores Autorizados para Organoides:** `jose.lauriano@ufpe.br` (`jose.lauriano`), `julia.braga@ufpe.br` (`julia.pereira`) | senha `Proc@HPB2026`\n"
                 "- **Demais Processadores:** `luisa.sandrelly@ufpe.br`, `carolina.hpb@ufpe.br` | senha `Proc@HPB2026`"
             )
@@ -3240,7 +3240,7 @@ else:
                     e_c1, e_c2, e_c3 = st.columns([2, 2, 1.2])
                     col_esc_now = e_c1.selectbox(
                         "Selecionar Coletador (Com histórico de coletas e dias sem coletar):",
-                        df_r_col["Username"].tolist() if not df_r_col.empty else ["claudio.montenegro"],
+                        df_r_col["Username"].tolist() if not df_r_col.empty else ["claudio.cordeiro"],
                         format_func=lambda u: (
                             f"{df_r_col[df_r_col['Username']==u]['Coletor'].iloc[0]} "
                             f"({df_r_col[df_r_col['Username']==u]['Total de Coletas Realizadas'].iloc[0]} coletas | "
