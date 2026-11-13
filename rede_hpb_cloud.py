@@ -14,14 +14,20 @@ import pypdf
 from sqlalchemy import create_engine, text
 import streamlit as st
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+import base64
+
+# --- 1. CONFIGURAÇÃO DA PÁGINA COM SUPORTE À LOGO DA REDE HPB ---
+LOGO_ARQUIVO_PADRAO = "logo_hpb.png"
+icone_pagina = LOGO_ARQUIVO_PADRAO if os.path.exists(LOGO_ARQUIVO_PADRAO) else "🧬"
+
 st.set_page_config(
-    page_title="Rede HPB",
-    layout="centered",
+    page_title="Rede HPB - Plataforma Operacional, Qualidade e Governança",
+    page_icon=icone_pagina,
+    layout="wide",
 )
 
 
-# --- 2. CONEXÃO SEGURA COM O BANCO DE DADOS (SUPABASE POSTGRESQL OU SQLITE AUTOMÁTICO) ---
+# --- 2. CONEXÃO SEGURA COM O NOVO SUPABASE INDEPENDENTE (qybphqznfpemkrvfoqfp) ---
 @st.cache_resource
 def get_engine():
     try:
@@ -30,19 +36,20 @@ def get_engine():
         eng = create_engine(
             db_url, pool_pre_ping=True, pool_size=5, max_overflow=10
         )
-        # Testa a conexão real aqui dentro: se o Supabase estiver pausado, cai no except abaixo
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return eng
-    except Exception:
-        return create_engine(
+        return eng, "SUPABASE_ONLINE", ""
+    except Exception as e:
+        eng_local = create_engine(
             "sqlite:///rede_hpb_local.db",
             connect_args={"check_same_thread": False},
         )
+        return eng_local, "SQLITE_FALLBACK", str(e)
 
 
-engine = get_engine()
+engine, STATUS_BANCO_ATUAL, ERRO_CONEXAO_SUPABASE = get_engine()
 IS_SQLITE = "sqlite" in str(engine.url)
+
 
 def run_sql(query: str, params: dict = None):
     with engine.begin() as conn:
@@ -62,7 +69,6 @@ def fetch_all(query: str, params: dict = None):
 def fetch_df(query: str, params: dict = None) -> pd.DataFrame:
     with engine.connect() as conn:
         return pd.read_sql(text(query), conn, params=params or {})
-
 
 # --- 3. CONSTANTES INSTITUCIONAIS E PERMISSÕES DE ACESSO DA REDE HPB ---
 CENTROS_HOSPITAIS_HPB = {
@@ -786,14 +792,126 @@ def disparar_email_hpb(destinatarios: list[str], assunto: str, corpo: str) -> bo
         return False
 
 
+def inicializar_tabela_pastas_e_logo_supabase():
+    """Garante que todas as pastas de PDFs e a Logo da Rede HPB fiquem salvas dentro do Supabase."""
+    pk_s = "INTEGER PRIMARY KEY AUTOINCREMENT" if IS_SQLITE else "SERIAL PRIMARY KEY"
+    run_sql(f"""
+        CREATE TABLE IF NOT EXISTS hpb_arquivos_pastas_supabase (
+            id_arquivo {pk_s},
+            pasta_virtual TEXT,
+            id_hpb TEXT,
+            tipo_documento TEXT,
+            nome_arquivo TEXT,
+            conteudo_base64 TEXT,
+            enviado_por TEXT,
+            enviado_em TEXT
+        )
+    """)
+    run_sql("""
+        CREATE TABLE IF NOT EXISTS hpb_config_sistema (
+            chave TEXT PRIMARY KEY,
+            valor_int INTEGER DEFAULT 0,
+            valor_texto TEXT,
+            atualizado_por TEXT,
+            atualizado_em TEXT
+        )
+    """)
+    try:
+        run_sql("ALTER TABLE hpb_config_sistema ADD COLUMN valor_texto TEXT")
+    except Exception:
+        pass
+
+
 def salvar_pdf_pasta_drive_sincronizada(id_hpb: str, tipo_doc: str, uploaded_file) -> str:
+    """
+    Salva o PDF simultaneamente na pasta física e dentro da tabela 'hpb_arquivos_pastas_supabase'
+    do projeto Supabase (qybphqznfpemkrvfoqfp), organizando por pasta virtual de cada paciente.
+    """
+    inicializar_tabela_pastas_e_logo_supabase()
+    pasta_paciente = f"Rede_HPB/{id_hpb.replace(' ', '')}/{tipo_doc}"
     pasta_base = os.path.join("Drive_Rede_HPB", id_hpb.replace(" ", ""))
     os.makedirs(pasta_base, exist_ok=True)
     nome_seguro = f"{id_hpb}_{tipo_doc}_{uploaded_file.name}"
     caminho_completo = os.path.join(pasta_base, nome_seguro)
+
+    raw_bytes = uploaded_file.getvalue()
     with open(caminho_completo, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+        f.write(raw_bytes)
+
+    b64_str = base64.b64encode(raw_bytes).decode("ascii")
+    run_sql(
+        """INSERT INTO hpb_arquivos_pastas_supabase
+           (pasta_virtual, id_hpb, tipo_documento, nome_arquivo, conteudo_base64, enviado_por, enviado_em)
+           VALUES (:pv, :id, :td, :na, :b64, :u, :dh)""",
+        {
+            "pv": pasta_paciente,
+            "id": id_hpb,
+            "td": tipo_doc,
+            "na": nome_seguro,
+            "b64": b64_str,
+            "u": st.session_state.get("username", "sistema"),
+            "dh": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    )
     return caminho_completo
+
+
+def salvar_logo_hpb_no_supabase(uploaded_logo):
+    """Salva a imagem da Logo da Rede HPB dentro do Supabase para exibição em todo o app."""
+    inicializar_tabela_pastas_e_logo_supabase()
+    b64_logo = base64.b64encode(uploaded_logo.getvalue()).decode("ascii")
+    mime = "image/png" if uploaded_logo.name.lower().endswith(".png") else "image/jpeg"
+    data_uri = f"data:{mime};base64,{b64_logo}"
+    agora_l = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if fetch_one("SELECT chave FROM hpb_config_sistema WHERE chave = 'logo_rede_hpb_base64'"):
+        run_sql(
+            """UPDATE hpb_config_sistema
+               SET valor_texto = :vt, atualizado_por = :u, atualizado_em = :dh
+               WHERE chave = 'logo_rede_hpb_base64'""",
+            {"vt": data_uri, "u": st.session_state.get("username", "moacyr"), "dh": agora_l},
+        )
+    else:
+        run_sql(
+            """INSERT INTO hpb_config_sistema (chave, valor_int, valor_texto, atualizado_por, atualizado_em)
+               VALUES ('logo_rede_hpb_base64', 1, :vt, :u, :dh)""",
+            {"vt": data_uri, "u": st.session_state.get("username", "moacyr"), "dh": agora_l},
+        )
+
+
+def exibir_cabecalho_com_logo_hpb(subtitulo: str = ""):
+    """Exibe a Logo da Rede HPB ao lado do título."""
+    inicializar_tabela_pastas_e_logo_supabase()
+    logo_src = None
+    row_logo = fetch_one("SELECT valor_texto FROM hpb_config_sistema WHERE chave = 'logo_rede_hpb_base64'")
+    if row_logo and row_logo[0]:
+        logo_src = row_logo[0]
+    elif os.path.exists("logo_hpb.png"):
+        with open("logo_hpb.png", "rb") as f_img:
+            b64_local = base64.b64encode(f_img.read()).decode("ascii")
+            logo_src = f"data:image/png;base64,{b64_local}"
+
+    if logo_src:
+        c_logo, c_tit = st.columns([1, 6])
+        with c_logo:
+            st.markdown(
+                f"<img src='{logo_src}' style='max-height:78px; width:auto; border-radius:8px; object-fit:contain;'>",
+                unsafe_allow_html=True,
+            )
+        with c_tit:
+            st.title("Rede HPB — Plataforma Clínica, Biobanco e Governança")
+            if subtitulo:
+                st.caption(subtitulo)
+    else:
+        st.title("Rede HPB — Plataforma Clínica, Biobanco e Governança")
+        if subtitulo:
+            st.caption(subtitulo)
+
+    # Alerta diagnóstico caso o Supabase ainda não esteja conectado
+    if STATUS_BANCO_ATUAL != "SUPABASE_ONLINE":
+        st.warning(
+            f"Atenção: O app está rodando em banco local temporário porque a URL do Supabase nos Secrets retornou: `{ERRO_CONEXAO_SUPABASE}`. "
+            "Verifique nos Secrets se a URL começa com `postgresql://postgres.qybphqznfpemkrvfoqfp:SUA_SENHA@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`."
+        )
 
 
 # --- 6. MOTOR DE TERMÔMETROS DUPLOS, CÓDIGO DE CORES E LINHA DO TEMPO DE INATIVIDADE ---
@@ -1783,10 +1901,9 @@ if "hpb_logged_in" not in st.session_state:
     st.session_state.hpb_logged_in = False
 
 if not st.session_state.hpb_logged_in:
-    st.title("Rede HPB")
-    st.caption(
-        "Acesso Institucional Vinculado ao Domínio Google Workspace @ufpe.br | Centros: HC-UFPE, HUOC-UPE e HCP"
-    )
+    exibir_cabecalho_com_logo_hpb(
+    "Acesso Institucional Vinculado ao Domínio Google Workspace @ufpe.br | Centros: HC-UFPE, HUOC-UPE e HCP"
+)
 
     tab_login, tab_cad = st.tabs(["Login Institucional (@ufpe.br)", "Credenciamento de Membro (@ufpe.br)"])
 
@@ -3059,6 +3176,13 @@ else:
     #              LISTA CROMÁTICA (VERDE/AZUL/AMARELO/VERMELHO) + ÁREA GRÁFICA DO PACIENTE
     # =========================================================================
     elif modulo_ativo.startswith("P.I."):
+        exibir_cabecalho_com_logo_hpb("Governança Científica, Escalas e Auditoria — Projeto Supabase Independente")
+         with st.expander("🖼️ Configurar / Atualizar Logotipo Oficial da Rede HPB no Aplicativo", expanded=False):
+             arq_logo_up = st.file_uploader("Selecione a imagem da Logo da Rede HPB (.png ou .jpg):", type=["png", "jpg", "jpeg"], key="up_logo_hpb_pi")
+             if arq_logo_up is not None and st.button("Salvar Logo da Rede HPB no Banco de Dados", type="primary", key="btn_salvar_logo_hpb"):
+                 salvar_logo_hpb_no_supabase(arq_logo_up)
+                 st.success("Logotipo da Rede HPB salvo no Supabase e aplicado em todo o sistema!")
+                 st.rerun()
         if not (usuario_eh_moacyr() or usuario_pode_escalar()):
             st.error("Acesso restrito aos Pesquisadores Responsáveis (Prof. Dr. Moacyr e Valécia).")
         else:
