@@ -655,7 +655,7 @@ if "db_hpb_v5_initialized" not in st.session_state:
     _seed_membro("claudio.cordeiro", "Cláudio Leandro Cordeiro da Silva Junior", "Rede@HPB2026", "claudio.cjunior@ufpe.br", "(81) 99882-7297", "Bioinformata")
     _seed_membro("jessica.winely", "Jéssica Winely Batista da Silva", "Rede@HPB2026", "jessica.winely@ufpe.br", "(81) 98166-0726", "Controle_Qualidade")
     _seed_membro("barbara.andrade", "Bárbara Fernanda Pessoa de Andrade", "Rede@HPB2026", "barbara.andrade@ufpe.br", "(81) 98956-9873", "Coletor")
-    _seed_membro("cecilia.silva", "Cecília Evellyn da Silva", "Rede@HPB2026", "cecilia.evellyn@ufpe.br", "(81) 99801-0673", "Coletor")
+    _seed_membro("cecilia.silva", "Cecília Evellyn da Silva", "Rede@HPB2026", "cecilia.evellyn@ufpe.br", "(81) 99801-0673", "Agenda_HPB")
     _seed_membro("matheus.conceicao", "Matheus Ítalo da Conceição", "Rede@HPB2026", "matheus.italo@ufpe.br", "(81) 98583-2402", "Coletor")
     _seed_membro("vanessa.brito", "Vanessa de Albuquerque Brito", "Rede@HPB2026", "vanessa.brito@ufpe.br", "(81) 99806-8764", "Coletor")
     # Processadores habilitados para Organoides (Lauriano e Julia Braga) e demais processadores
@@ -1832,7 +1832,7 @@ if not st.session_state.hpb_logged_in:
                 "- **Pesquisadora / Coordenação (Valécia):** `valecia.costa@ufpe.br` (ou `valecia.costa`) | senha `Rede@HPB2026`\n"
                 "- **Controle de Qualidade (2ª Checagem, Agilidade e Viabilidade):** `qualidade.hpb@ufpe.br` (ou `qualidade.hpb`) | senha `Quali@HPB2026`\n"
                 "- **Bioinformata (Consulta Completa Clínico-Genômica):** `bioinformatica.hpb@ufpe.br` (ou `bioinfo.hpb`) | senha `Bio@HPB2026`\n"
-                "- **Coletores (Interface Minimalista Semanal):** `jessica.winely@ufpe.br`| senha `Rede@HPB2026`\n"
+                "- **Coletores (Interface Minimalista Semanal):** `matheus.conceicao`| senha `Rede@HPB2026`\n"
                 "- **Processadores Autorizados para Organoides:** `jose.lauriano@ufpe.br` (`jose.lauriano`), `julia.braga@ufpe.br` (`julia.pereira`) | senha `Proc@HPB2026`\n"
                 "- **Demais Processadores:** `luisa.sandrelly@ufpe.br`, `carolina.hpb@ufpe.br` | senha `Proc@HPB2026`"
             )
@@ -1847,7 +1847,7 @@ if not st.session_state.hpb_logged_in:
         novo_email = c_e.text_input("E-mail Institucional (@ufpe.br)", placeholder="usuario@ufpe.br", key="cad_email_input").strip().lower()
         novo_role = c_r.selectbox(
             "Atribuição na Rede HPB",
-            ["Coletor", "Processador", "Controle_Qualidade", "Bioinformata", "Agenda_HPB", "Coordenacao_Escala"],
+            ["Coletor", "Processador"],
             key="cad_role_select",
         )
         nova_senha = c_s.text_input("Criar Senha de Acesso", type="password", key="cad_password_input")
@@ -1885,37 +1885,38 @@ else:
     # Define a lista de interfaces disponíveis conforme a atribuição do usuário logado
     if usuario_eh_moacyr() or usuario_pode_escalar():
         abas_disponiveis = [
-            "Painel dos Pesquisadores Responsáveis (Moacyr & Valécia)",
-            "Controle de Qualidade (2ª Checagem, Viabilidade e Scores)",
-            "Rankings (Semana, Mês e Semestre) & Trocas de Escala",
-            "Interface do Coletador (Visão Semanal Minimalista)",
-            "Interface do Processador (Visão Semanal + Organoides)",
-            "Área do Bioinformata (Consulta Clínico-Genômica e Criocaixas)",
-            "Chat Privado entre Operadores",
+            "P.I.",
+            "Controle de Qualidade",
+            "Rankings & Trocas de Escala",
+            "Interface do Coletador",
+            "Interface do Processador",
+            "Área do Bioinformata",
+            "Chat ",
         ]
     elif role_atual == "Controle_Qualidade":
         abas_disponiveis = [
-            "Controle de Qualidade (2ª Checagem, Viabilidade e Scores)",
-            "Rankings (Semana, Mês e Semestre) & Trocas de Escala",
-            "Chat Privado entre Operadores",
+            "P.I.",
+            "Controle de Qualidade",
+            "Rankings & Trocas de Escala",
+            "Chat ",
         ]
     elif role_atual == "Bioinformata":
         abas_disponiveis = [
-            "Área do Bioinformata (Consulta Clínico-Genômica e Criocaixas)",
-            "Rankings (Semana, Mês e Semestre) & Trocas de Escala",
+            "Área do Bioinformata",
+            "Rankings & Trocas de Escala",
             "Chat Privado entre Operadores",
         ]
     elif role_atual == "Processador":
         abas_disponiveis = [
-            "Interface do Processador (Visão Semanal + Organoides)",
-            "Rankings (Semana, Mês e Semestre) & Trocas de Escala",
+            "Interface do Processador",
+            "Rankings & Trocas de Escala",
             "Chat Privado entre Operadores",
         ]
     else:
         abas_disponiveis = [
-            "Interface do Coletador (Visão Semanal Minimalista)",
-            "Rankings (Semana, Mês e Semestre) & Trocas de Escala",
-            "Chat Privado entre Operadores",
+            "Interface do Coletador",
+            "Rankings & Trocas de Escala",
+            "Chat",
         ]
 
     if "modulo_hpb_ativo" not in st.session_state or st.session_state.modulo_hpb_ativo not in abas_disponiveis:
@@ -1967,10 +1968,7 @@ else:
     # INTERFACE 1: COLETADOR (MINIMALISTA, CALENDÁRIO SEMANAL E MENU LATERAL)
     # =========================================================================
     if modulo_ativo.startswith("Interface do Coletador"):
-        st.subheader("Grade de Calendário da Semana Vigente — Minhas Coletas e Setores no HC")
-        st.caption(
-            "Visão Minimalista do Coletador: Exibe exclusivamente a ID, o Hospital/Setor de origem e a situação das amostras da sua semana."
-        )
+        st.subheader("Grade de Calendário da Semana Vigente")
 
         renderizar_grade_calendario_semanal_operador(st.session_state.username, modo="Coletor")
 
@@ -1988,7 +1986,7 @@ else:
 
         # Botão 'Adicionar mais coletas' fica ACESO apenas se existirem pacientes vagos para assumir
         if col_btn_add1.button(
-            f"➕ Adicionar mais coletas ({len(vagas_disponiveis_coleta)} disponível[is])" if tem_vagas_acesas else "➕ Adicionar mais coletas (Nenhum paciente vago na agenda)",
+            f"Adicionar mais coletas ({len(vagas_disponiveis_coleta)} disponível[is])" if tem_vagas_acesas else "Adicionar mais coletas",
             type="primary" if tem_vagas_acesas else "secondary",
             disabled=(not tem_vagas_acesas),
             use_container_width=True,
@@ -2128,10 +2126,10 @@ else:
             etapa_lateral_coletor = st.sidebar.radio(
                 "Menu do Paciente (Coletador):",
                 [
-                    "1. Anexação de Documentos (FERA, Ficha Clínica e TCLE)",
-                    "2. Preenchimento do iFERA",
-                    "3. Preenchimento da Ficha Clínica",
-                    "4. Revisão Final e Confirmação (Liberar ao Processador)",
+                    "1. Anexação de Documentos",
+                    "2. iFERA",
+                    "3. Ficha Clínica",
+                    "4. Liberação",
                 ],
                 key=f"menu_lat_col_{id_pac_trabalho}",
             )
@@ -2169,8 +2167,9 @@ else:
                 st.markdown(f"#### 1. Anexação de Documentos Digitalizados — Paciente `{id_pac_trabalho}`")
                 st.info(
                     "**Regra Operacional:** Anexe o **TCLE** e a **Ficha Clínica** (e opcionalmente o **FERA** digitalizado). "
-                    "O sistema realiza a leitura e autopreenchimento imediato do iFERA e da Ficha Clínica. "
-                    "O salvamento parcial do iFERA só é habilitado após anexar o TCLE e a Ficha Clínica."
+                    "O sistema realiza a leitura tenta preencher o FERA e a Ficha Clínica. "
+                    "O salvamento parcial do FERA só é habilitado após anexar o TCLE e a Ficha Clínica."
+                    "Anexar o documento não garante 100% de preenchimento automatico. REVISE!!"
                 )
 
                 c_dl_t = st.columns([3, 1])
@@ -2188,7 +2187,7 @@ else:
                 up_ficha = u2.file_uploader("2. Anexar PDF da Ficha Clínica *", type=["pdf"], key=f"up_ficha_{id_pac_trabalho}")
                 up_fera = u3.file_uploader("3. Anexar PDF do FERA (Opcional)", type=["pdf"], key=f"up_fera_{id_pac_trabalho}")
 
-                if st.button("Salvar Documentos Anexados e Executar Autopreenchimento Imediato", type="primary", key=f"btn_salvar_docs_{id_pac_trabalho}"):
+                if st.button("Salvar Documentos Anexados", type="primary", key=f"btn_salvar_docs_{id_pac_trabalho}"):
                     agora_doc = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     ext_combinado = {}
 
@@ -2485,10 +2484,7 @@ else:
     #              CONTINUAÇÃO DO iFERA, ORGANOIDES [LAURIANO/JULIA] E BLOQUEIO)
     # =========================================================================
     elif modulo_ativo.startswith("Interface do Processador"):
-        st.subheader("Grade de Agenda Semanal — Meus Pacientes Escalados para Processamento")
-        st.caption(
-            "Visão Minimalista do Processador: Exibe exclusivamente a ID, o Hospital de Origem e a situação das amostras e do processamento."
-        )
+        st.subheader("Grade de Agenda Semanal")
 
         renderizar_grade_calendario_semanal_operador(st.session_state.username, modo="Processador")
 
@@ -2884,7 +2880,7 @@ else:
     #              ACESSO A NOMES/PRONTUÁRIOS/PDFs E RELATÓRIO DE ERROS PARA PI)
     # =========================================================================
     elif modulo_ativo.startswith("Controle de Qualidade"):
-        st.header("Controle de Qualidade — 2ª Checagem, Parâmetros de Viabilidade, Scores de Agilidade e Auditoria Documental")
+        st.header("Controle de Qualidade")
         st.caption(
             "Atribuição Exclusiva de Qualidade: Acesso completo a Nomes, Prontuários, PDFs digitalizados e dados digitados. "
             "Todas as correções realizadas nesta segunda checagem registram automaticamente o erro e o tipo de erro para os Pesquisadores Responsáveis (Moacyr e Valécia)."
@@ -3062,11 +3058,11 @@ else:
     # INTERFACE 4: PAINEL DOS PESQUISADORES RESPONSÁVEIS (MOACYR & VALÉCIA)
     #              LISTA CROMÁTICA (VERDE/AZUL/AMARELO/VERMELHO) + ÁREA GRÁFICA DO PACIENTE
     # =========================================================================
-    elif modulo_ativo.startswith("Painel dos Pesquisadores"):
+    elif modulo_ativo.startswith("P.I."):
         if not (usuario_eh_moacyr() or usuario_pode_escalar()):
             st.error("Acesso restrito aos Pesquisadores Responsáveis (Prof. Dr. Moacyr e Valécia).")
         else:
-            st.header("Painel dos Pesquisadores Responsáveis — Visão Cromática de Pacientes e Dossiê Gráfico")
+            st.header("P.I.")
             # --- CONTROLE EXCLUSIVO DA TRAVA DE DISPARO DE E-MAILS (MOACYR & VALÉCIA) ---
             email_ativo_atu, quem_alt_em, quando_alt_em = obter_status_trava_email()
             with st.container(border=True):
@@ -3441,11 +3437,11 @@ else:
     # INTERFACE 5: RANKINGS (SEMANA, MÊS E SEMESTRE) & TROCAS DE ESCALA (3 + 1 MOACYR)
     # =========================================================================
     elif modulo_ativo.startswith("Rankings"):
-        st.header("🏆 Rankings de Desempenho (Semana, Mês e Semestre) & Trocas de Escala")
+        st.header("🏆 Rankings & Trocas de Escala")
 
         r_tab1, r_tab2 = st.tabs([
-            "1. Rankings de Coletores e Processadores (Semana / Mês / Semestre)",
-            "2. Trocas de Escala entre Operadores (Até 3/mês + 1 se escolha de Moacyr)",
+            "1. Rankings de Coletores e Processadores)",
+            "2. Trocas de Escala entre Operadores",
         ])
 
         with r_tab1:
@@ -3540,7 +3536,7 @@ else:
     # INTERFACE 7: CHAT PRIVADO ENTRE OPERADORES (NUNCA EXPOSTO NA AUDITORIA)
     # =========================================================================
     elif modulo_ativo.startswith("Chat Privado"):
-        st.header("💬 Chat Privado entre Operadores da Rede HPB")
+        st.header("Chat Privado")
         st.caption("Sigilo de Comunicação: As mensagens trocadas entre operadores não são registradas nem exibidas na trilha de auditoria.")
 
         todos_ops = fetch_all("SELECT username, nome_completo, role FROM hpb_usuarios WHERE ativo = 1 ORDER BY nome_completo")
