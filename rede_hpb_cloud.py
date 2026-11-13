@@ -3177,12 +3177,12 @@ else:
     # =========================================================================
     elif modulo_ativo.startswith("P.I."):
         exibir_cabecalho_com_logo_hpb("Governança Científica, Escalas e Auditoria — Projeto Supabase Independente")
-         with st.expander("🖼️ Configurar / Atualizar Logotipo Oficial da Rede HPB no Aplicativo", expanded=False):
-             arq_logo_up = st.file_uploader("Selecione a imagem da Logo da Rede HPB (.png ou .jpg):", type=["png", "jpg", "jpeg"], key="up_logo_hpb_pi")
-             if arq_logo_up is not None and st.button("Salvar Logo da Rede HPB no Banco de Dados", type="primary", key="btn_salvar_logo_hpb"):
-                 salvar_logo_hpb_no_supabase(arq_logo_up)
-                 st.success("Logotipo da Rede HPB salvo no Supabase e aplicado em todo o sistema!")
-                 st.rerun()
+        with st.expander("🖼️ Configurar / Atualizar Logotipo Oficial da Rede HPB no Aplicativo", expanded=False):
+            arq_logo_up = st.file_uploader("Selecione a imagem da Logo da Rede HPB (.png ou .jpg):", type=["png", "jpg", "jpeg"], key="up_logo_hpb_pi")
+            if arq_logo_up is not None and st.button("Salvar Logo da Rede HPB no Banco de Dados", type="primary", key="btn_salvar_logo_hpb"):
+                salvar_logo_hpb_no_supabase(arq_logo_up)
+                st.success("Logotipo da Rede HPB salvo no Supabase e aplicado em todo o sistema!")
+                st.rerun()
         if not (usuario_eh_moacyr() or usuario_pode_escalar()):
             st.error("Acesso restrito aos Pesquisadores Responsáveis (Prof. Dr. Moacyr e Valécia).")
         else:
