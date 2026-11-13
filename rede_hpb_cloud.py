@@ -21,7 +21,7 @@ LOGO_ARQUIVO_PADRAO = "logo_hpb.png"
 icone_pagina = LOGO_ARQUIVO_PADRAO if os.path.exists(LOGO_ARQUIVO_PADRAO) else "🧬"
 
 st.set_page_config(
-    page_title="Rede HPB - Plataforma Operacional, Qualidade e Governança",
+    page_title="Rede HPB",
     page_icon=icone_pagina,
     layout="wide",
 )
