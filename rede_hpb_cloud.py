@@ -16,8 +16,8 @@ import streamlit as st
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="Rede HPB - Plataforma Operacional, Qualidade e Governança",
-    layout="wide",
+    page_title="Rede HPB",
+    layout="centered",
 )
 
 
