@@ -689,11 +689,6 @@ if "db_hpb_v5_initialized" not in st.session_state:
                    VALUES (:u, :n, :p, :e, :t, :r, 1, :ul)""",
                 {"u": u, "n": nome, "p": f"{salt}${dk.hex()}", "e": em, "t": tel, "r": r, "ul": agora_seed},
             )
-        else:
-            run_sql(
-                "UPDATE hpb_usuarios SET email = :e, role = :r, nome_completo = :n WHERE username = :u",
-                {"e": em, "r": r, "n": nome, "u": u},
-            )
 
     _seed_membro("moacyr", "Prof. Dr. Moacyr Jesus Barreto de Melo Rêgo", "Moacyr@HPB2026", "moacyr.rego@ufpe.br", "(81) 99794-3799", "Pesquisador_Responsavel")
     _seed_membro("valecia.costa", "Valécia de Cássia Mendonça da Costa", "Rede@HPB2026", "valecia.costa@ufpe.br", "(81) 99609-9850", "Coordenacao_Escala")
@@ -709,7 +704,7 @@ if "db_hpb_v5_initialized" not in st.session_state:
     # Processadores habilitados para Organoides (Lauriano e Julia Braga) e demais processadores
     _seed_membro("jose.lauriano", "José Lauriano da Silva Filho", "Proc@HPB2026", "jose.lauriano@ufpe.br", "(81) 98242-1105", "Processador")
     _seed_membro("julia.pereira", "Julia Braga Pereira", "Proc@HPB2026", "julia.braga@ufpe.br", "(81) 98624-2979", "Processador")
-    _seed_membro("carol.caf", "Carolina Processamento Rede HPB", "Proc@HPB2026", "carolina.hpb@ufpe.br", "(81) 2126-8588", "Processador")
+    _seed_membro("ana.carolina", "Ana Carolina", "Proc@HPB2026", "carolina.hpb@ufpe.br", "(81) 2126-8588", "Processador")
     _seed_membro("luisa.sandrelly", "Luísa Sandrelly", "Proc@HPB2026", "luisa.sandrelly@ufpe.br", "(81) 2126-8588", "Processador")
     _seed_membro("processador_lab", "Equipe de Processamento LINAT/UFPE", "Proc@HPB2026", "processador.hpb@ufpe.br", "(81) 2126-8588", "Processador")
 
@@ -955,6 +950,85 @@ def exibir_cabecalho_com_logo_hpb(subtitulo: str = ""):
             "Verifique nos Secrets se a URL começa com `postgresql://postgres.qybphqznfpemkrvfoqfp:SUA_SENHA@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`."
         )
 
+def migrar_colunas_perfil_usuarios():
+    """Adiciona no Supabase as colunas de foto e personalização do perfil do operador."""
+    novas_cols = [
+        ("foto_base64", "TEXT"),
+        ("bio_especialidade", "TEXT"),
+        ("setor_preferencial", "TEXT"),
+    ]
+    for c_nome, c_tipo in novas_cols:
+        try:
+            run_sql(f"ALTER TABLE hpb_usuarios ADD COLUMN {c_nome} {c_tipo}")
+        except Exception:
+            pass
+
+
+def obter_avatar_html_operador(username_ou_nome: str, tamanho_px: int = 42, borda_cor: str = "#38bdf8") -> str:
+    """
+    Retorna a tag HTML circular com a foto real do operador salva no Supabase
+    (ou um avatar estilizado com as iniciais caso ainda não tenha enviado foto).
+    """
+    migrar_colunas_perfil_usuarios()
+    if not username_ou_nome or str(username_ou_nome).strip() in [
+        "-", "Sem Coletor", "Sem Processador", "Não acionado", "Pendente CQ", "Não escalado"
+    ]:
+        return (
+            f"<div style='width:{tamanho_px}px; height:{tamanho_px}px; border-radius:50%; background:#1e293b; "
+            f"border:2px dashed #475569; display:inline-flex; align-items:center; justify-content:center; "
+            f"color:#64748b; font-weight:700; font-size:{max(10, tamanho_px//3)}px; vertical-align:middle;'>?</div>"
+        )
+
+    texto_bruto = str(username_ou_nome).strip()
+    u_extraido = texto_bruto.split("(")[-1].replace(")", "").strip().lower()
+    row = fetch_one(
+        """SELECT nome_completo, foto_base64
+           FROM hpb_usuarios
+           WHERE LOWER(username) = :u OR LOWER(nome_completo) = :raw""",
+        {"u": u_extraido, "raw": texto_bruto.lower()},
+    )
+    if row and row[1]:
+        return (
+            f"<img src='{row[1]}' style='width:{tamanho_px}px; height:{tamanho_px}px; border-radius:50%; "
+            f"object-fit:cover; border:2px solid {borda_cor}; vertical-align:middle;'>"
+        )
+
+    nome_ref = (row[0] if row and row[0] else texto_bruto).strip()
+    partes = [p[0].upper() for p in nome_ref.split() if p and p[0].isalpha()]
+    iniciais = (partes[0] + (partes[-1] if len(partes) > 1 else "")) if partes else "OP"
+    return (
+        f"<div style='width:{tamanho_px}px; height:{tamanho_px}px; border-radius:50%; background:#0f172a; "
+        f"border:2px solid {borda_cor}; display:inline-flex; align-items:center; justify-content:center; "
+        f"color:#f8fafc; font-weight:800; font-size:{max(11, int(tamanho_px*0.38))}px; vertical-align:middle;'>{iniciais}</div>"
+    )
+
+
+def renderizar_podio_visual_com_fotos(df_rank: pd.DataFrame, col_nome: str, col_qtd: str):
+    """Exibe o Pódio Visual Top 3 (Ouro, Prata e Bronze) com as fotos reais dos operadores."""
+    if df_rank.empty:
+        return
+    top3 = df_rank.head(3)
+    medalhas = [
+        ("1º Lugar • Ouro", "#eab308", "#422006"),
+        ("2º Lugar • Prata", "#94a3b8", "#1e293b"),
+        ("3º Lugar • Bronze", "#d97706", "#451a03"),
+    ]
+    cols_p = st.columns(len(top3))
+    for i, (_, r) in enumerate(top3.iterrows()):
+        rot_m, cor_borda, cor_bg = medalhas[i]
+        av_html = obter_avatar_html_operador(r["Username"], tamanho_px=58, borda_cor=cor_borda)
+        cols_p[i].markdown(
+            f"""
+            <div style="background:{cor_bg}; border:2px solid {cor_borda}; border-radius:10px; padding:12px; text-align:center; color:#f8fafc; margin-bottom:10px;">
+                <div style="font-size:11.5px; font-weight:800; color:{cor_borda}; margin-bottom:6px;">{rot_m}</div>
+                <div>{av_html}</div>
+                <div style="font-size:13.5px; font-weight:800; margin-top:6px;">{r[col_nome]}</div>
+                <div style="font-size:12px; color:#cbd5e1;"><b>{r['Pontuação Geral']} pts</b> • {r[col_qtd]} concl.</div>
+                <div style="font-size:11px; color:#94a3b8;">Agilidade: {r['Score Agilidade (%)']}%</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # --- 6. MOTOR DE TERMÔMETROS DUPLOS, CÓDIGO DE CORES E LINHA DO TEMPO DE INATIVIDADE ---
 def calcular_diferenca_tempo_legivel(timestamp_str: str) -> tuple[str, float]:
@@ -1987,13 +2061,12 @@ if not st.session_state.hpb_logged_in:
 
         with st.expander("Contas Institucionais @ufpe.br Pré-Configuradas"):
             st.markdown(
-                "- **Pesquisador Responsável (Prof. Moacyr):** `moacyr.rego@ufpe.br` (ou `moacyr`) | senha `Moacyr@HPB2026`\n"
-                "- **Pesquisadora / Coordenação (Valécia):** `valecia.costa@ufpe.br` (ou `valecia.costa`) | senha `Rede@HPB2026`\n"
-                "- **Controle de Qualidade (2ª Checagem, Agilidade e Viabilidade):** `qualidade.hpb@ufpe.br` (ou `qualidade.hpb`) | senha `Quali@HPB2026`\n"
-                "- **Bioinformata (Consulta Completa Clínico-Genômica):** `bioinformatica.hpb@ufpe.br` (ou `bioinfo.hpb`) | senha `Bio@HPB2026`\n"
-                "- **Coletores (Interface Minimalista Semanal):** `matheus.conceicao`| senha `Rede@HPB2026`\n"
-                "- **Processadores Autorizados para Organoides:** `jose.lauriano@ufpe.br` (`jose.lauriano`), `julia.braga@ufpe.br` (`julia.pereira`) | senha `Proc@HPB2026`\n"
-                "- **Demais Processadores:** `luisa.sandrelly@ufpe.br`, `carolina.hpb@ufpe.br` | senha `Proc@HPB2026`"
+                "- **Coordenação:** `moacyr.rego@ufpe.br` (ou `moacyr`) | senha `Moacyr@HPB2026`\n"
+                "- **Supervisão:** `valecia.costa@ufpe.br` (ou `valecia.costa`) | senha `Rede@HPB2026`\n"
+                "- **Controle de Qualidade:** `qualidade.hpb@ufpe.br` (ou `qualidade.hpb`) | senha `Quali@HPB2026`\n"
+                "- **Bioinformata:** `bioinformatica.hpb@ufpe.br` (ou `bioinfo.hpb`) | senha `Bio@HPB2026`\n"
+                "- **Coletores:** `matheus.conceicao`| senha `Rede@HPB2026`\n"
+                "- **Processadores:** `jose.lauriano`, `carolina.hpb`, `luisa.sandrelly, `julia.pereira` | senha `Proc@HPB2026`\n"
             )
 
     with tab_cad:
@@ -2077,7 +2150,9 @@ else:
             "Rankings & Trocas de Escala",
             "Chat",
         ]
-
+    
+    abas_disponiveis.append("Meu Perfil & Credenciais")
+    
     if "modulo_hpb_ativo" not in st.session_state or st.session_state.modulo_hpb_ativo not in abas_disponiveis:
         st.session_state.modulo_hpb_ativo = abas_disponiveis[0]
 
@@ -2114,11 +2189,14 @@ else:
     with top_c2:
         st.markdown(f"**Interface Ativa:** `{st.session_state.modulo_hpb_ativo}`")
     with top_c3:
-        st.markdown(
-            f"<div style='text-align:right;'><b>{st.session_state.nome_usuario}</b><br>"
-            f"<span style='font-size:12px; color:#64748b;'>{st.session_state.get('email_ufpe', '')} • <code>{role_atual}</code></span></div>",
-            unsafe_allow_html=True,
-        )
+    av_top = obter_avatar_html_operador(st.session_state.username, tamanho_px=38, borda_cor="#10b981")
+    st.markdown(
+        f"<div style='display:flex; justify-content:flex-end; align-items:center; gap:10px;'>"
+        f"<div style='text-align:right;'><b>{st.session_state.nome_usuario}</b><br>"
+        f"<span style='font-size:11.5px; color:#64748b;'>{st.session_state.get('email_ufpe', '')} • <code>{role_atual}</code></span></div>"
+        f"<div>{av_top}</div></div>",
+        unsafe_allow_html=True,
+    )
 
     st.divider()
     modulo_ativo = st.session_state.modulo_hpb_ativo
@@ -3477,10 +3555,12 @@ else:
                     ("2ª Checagem (Qualidade)", (row_det_pi[7] if row_det_pi and row_det_pi[7] else "Pendente CQ"), "#ec4899"),
                 ]
                 for idx_rc, (area_lbl, nome_r, cor_r) in enumerate(resp_cards):
+                    av_resp = obter_avatar_html_operador(nome_r, tamanho_px=46, borda_cor=cor_r)
                     resp_cols[idx_rc].markdown(
-                        f"<div style='background:#0f172a; border-top:4px solid {cor_r}; padding:10px; border-radius:8px; text-align:center;'>"
-                        f"<div style='font-size:11px; color:#94a3b8; font-weight:700;'>{area_lbl}</div>"
-                        f"<div style='font-size:14px; color:#f8fafc; font-weight:800; margin-top:4px;'>{nome_r}</div></div>",
+                        f"<div style='background:#0f172a; border-top:4px solid {cor_r}; padding:12px 8px; border-radius:8px; text-align:center;'>"
+                        f"<div style='font-size:11px; color:#94a3b8; font-weight:700; margin-bottom:6px;'>{area_lbl}</div>"
+                        f"<div>{av_resp}</div>"
+                        f"<div style='font-size:13px; color:#f8fafc; font-weight:800; margin-top:6px;'>{nome_r}</div></div>",
                         unsafe_allow_html=True,
                     )
 
@@ -3622,10 +3702,12 @@ else:
 
             rc1, rc2 = st.columns(2)
             with rc1:
-                st.subheader(f"🥇 Ranking de Coletores — {periodo_sel}")
+                st.subheader(f"Ranking de Coletores — {periodo_sel}")
+                renderizar_podio_visual_com_fotos(df_rank_c, "Coletador", "Coletas no Período")
                 st.dataframe(df_rank_c, use_container_width=True, hide_index=True)
             with rc2:
-                st.subheader(f"🥇 Ranking de Processadores — {periodo_sel}")
+                st.subheader(f"Ranking de Processadores — {periodo_sel}")
+                renderizar_podio_visual_com_fotos(df_rank_p, "Processador", "Processamentos no Período")
                 st.dataframe(df_rank_p, use_container_width=True, hide_index=True)
 
         with r_tab2:
@@ -3737,10 +3819,174 @@ else:
             alin = "right" if r_u == st.session_state.username else "left"
             bg_c = "#065f46" if r_u == st.session_state.username else "#1e293b"
             st.markdown(
-                f"<div style='text-align:{alin}; margin-bottom:6px;'>"
-                f"<div style='display:inline-block; background:{bg_c}; color:#f8fafc; padding:8px 12px; border-radius:10px; border:1px solid #334155; text-align:left;'>"
-                f"<div style='font-size:10.5px; color:#94a3b8;'><b>{r_n}</b> ({r_u}) • {dh_t}</div>"
-                f"<div style='font-size:13px;'>{m_t}</div></div></div>",
+                f"<div style='text-align:{alin}; margin-bottom:8px;'>"
+                f"<div style='display:inline-flex; align-items:center; gap:10px; background:{bg_c}; color:#f8fafc; padding:8px 12px; border-radius:10px; border:1px solid #334155; text-align:left;'>"
+                f"<div>{av_msg}</div>"
+                f"<div><div style='font-size:10.5px; color:#94a3b8;'><b>{r_n}</b> ({r_u}) • {dh_t}</div>"
+                f"<div style='font-size:13px; margin-top:2px;'>{m_t}</div></div></div></div>",
                 unsafe_allow_html=True,
             )
 # FIM DO ARQUIVO rede_hpb_cloud.py (PARTE 4 DE 4)
+# =========================================================================
+    # INTERFACE 8: MEU PERFIL & CREDENCIAIS (FOTO, DADOS PESSOAIS, E-MAIL E SENHA)
+    # =========================================================================
+    elif modulo_ativo.startswith("Meu Perfil"):
+        migrar_colunas_perfil_usuarios()
+        u_logado = st.session_state.username
+        row_perf = fetch_one(
+            """SELECT nome_completo, email, telefone, role, ultimo_login_em,
+                      foto_base64, bio_especialidade, setor_preferencial, password_hash
+               FROM hpb_usuarios WHERE username = :u""",
+            {"u": u_logado},
+        )
+        nome_atu = row_perf[0] if row_perf and row_perf[0] else st.session_state.nome_usuario
+        email_atu = row_perf[1] if row_perf and row_perf[1] else st.session_state.get("email_ufpe", "")
+        tel_atu = row_perf[2] if row_perf and row_perf[2] else ""
+        role_atu = row_perf[3] if row_perf and row_perf[3] else st.session_state.role
+        ult_log_atu = row_perf[4] if row_perf and row_perf[4] else "-"
+        foto_atu = row_perf[5] if row_perf and row_perf[5] else ""
+        bio_atu = row_perf[6] if row_perf and row_perf[6] else ""
+        setor_pref_atu = row_perf[7] if row_perf and row_perf[7] in SETORES_COLETA_HC_HPB else SETORES_COLETA_HC_HPB[0]
+        hash_senha_atu = row_perf[8] if row_perf else ""
+
+        tot_col_op = fetch_one("SELECT COUNT(*) FROM hpb_coletas_ifera WHERE responsavel_coleta = :u", {"u": u_logado})[0] or 0
+        tot_proc_op = fetch_one("SELECT COUNT(*) FROM hpb_coletas_ifera WHERE responsavel_recebimento = :u", {"u": u_logado})[0] or 0
+        norm_tr, ext_tr = contar_trocas_mes_operador(u_logado)
+
+        st.header("Meu Perfil Institucional & Credenciais de Acesso")
+
+        avatar_grande = obter_avatar_html_operador(u_logado, tamanho_px=92, borda_cor="#10b981")
+        st.markdown(
+            f"""
+            <div style="background:#0f172a; border:1px solid #334155; border-left:6px solid #10b981; border-radius:12px; padding:18px 22px; display:flex; align-items:center; gap:20px; margin-bottom:18px;">
+                <div>{avatar_grande}</div>
+                <div style="color:#f8fafc;">
+                    <div style="font-size:20px; font-weight:800;">{nome_atu} <span style="font-size:13px; background:#065f46; color:#a7f3d0; padding:3px 10px; border-radius:999px; margin-left:8px;">{role_atu}</span></div>
+                    <div style="font-size:13px; color:#94a3b8; margin-top:4px;">Usuário: <code>{u_logado}</code> • E-mail: <b>{email_atu}</b> • Tel: {tel_atu or 'Não informado'}</div>
+                    <div style="font-size:12.5px; color:#cbd5e1; margin-top:4px;">Setor Preferencial: <b>{setor_pref_atu}</b> • {bio_atu or 'Membro Oficial da Rede HPB'}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        m_p1, m_p2, m_p3, m_p4 = st.columns(4)
+        m_p1.metric("Minhas Coletas Realizadas", tot_col_op)
+        m_p2.metric("Meus Processamentos Realizados", tot_proc_op)
+        m_p3.metric("Trocas de Escala no Mês", f"{norm_tr}/{LIMITE_TROCAS_MENSAL_PADRAO} (+{ext_tr} PI)")
+        m_p4.metric("Último Acesso Registrado", ult_log_atu)
+
+        p_tab1, p_tab2, p_tab3 = st.tabs([
+            "1. Minha Foto de Perfil & Dados Pessoais",
+            "2. Modificar Meu E-mail Institucional (@ufpe.br)",
+            "3. Modificar Minha Senha de Acesso",
+        ])
+
+        with p_tab1:
+            c_ft1, c_ft2 = st.columns([1.2, 2.8])
+            with c_ft1:
+                st.markdown("#### Foto do Crachá Digital")
+                arq_foto = st.file_uploader(
+                    "Envie sua foto (.png, .jpg, .jpeg):",
+                    type=["png", "jpg", "jpeg"],
+                    key="up_foto_perfil_proprio",
+                )
+                if arq_foto is not None:
+                    if st.button("Salvar Minha Nova Foto", type="primary", use_container_width=True, key="btn_salvar_foto_op"):
+                        b64_f = base64.b64encode(arq_foto.getvalue()).decode("ascii")
+                        mime_f = "image/png" if arq_foto.name.lower().endswith(".png") else "image/jpeg"
+                        uri_f = f"data:{mime_f};base64,{b64_f}"
+                        run_sql(
+                            "UPDATE hpb_usuarios SET foto_base64 = :ft WHERE username = :u",
+                            {"ft": uri_f, "u": u_logado},
+                        )
+                        log_audit("Atualização Foto Perfil", u_logado, "Operador atualizou a própria foto de perfil.")
+                        st.success("Foto salva no Supabase e ativada em todas as interfaces!")
+                        st.rerun()
+
+                if foto_atu and st.button("Remover Foto Atual", use_container_width=True, key="btn_rem_foto_op"):
+                    run_sql("UPDATE hpb_usuarios SET foto_base64 = NULL WHERE username = :u", {"u": u_logado})
+                    st.rerun()
+
+            with c_ft2:
+                st.markdown("#### Dados Pessoais e Personalização")
+                with st.form("form_dados_pessoais_perfil"):
+                    nv_nome = st.text_input("Meu Nome Completo / Nome de Exibição", value=nome_atu, key="pf_nome_in")
+                    nv_tel = st.text_input("Meu Telefone / WhatsApp", value=tel_atu, key="pf_tel_in")
+                    nv_setor = st.selectbox(
+                        "Meu Setor Preferencial de Atuação (HC / HUOC / HCP)",
+                        SETORES_COLETA_HC_HPB,
+                        index=SETORES_COLETA_HC_HPB.index(setor_pref_atu),
+                        key="pf_setor_in",
+                    )
+                    nv_bio = st.text_input(
+                        "Especialidade / Linha de Pesquisa / Mini-Bio",
+                        value=bio_atu,
+                        placeholder="Ex: Cultivo 3D de Organoides e Processamento RP10",
+                        key="pf_bio_in",
+                    )
+                    if st.form_submit_button("Salvar Meus Dados Pessoais", type="primary"):
+                        run_sql(
+                            """UPDATE hpb_usuarios
+                               SET nome_completo = :n, telefone = :t, setor_preferencial = :s, bio_especialidade = :b
+                               WHERE username = :u""",
+                            {"n": nv_nome.strip(), "t": nv_tel.strip(), "s": nv_setor, "b": nv_bio.strip(), "u": u_logado},
+                        )
+                        st.session_state.nome_usuario = nv_nome.strip()
+                        log_audit("Atualização Perfil Pessoal", u_logado, "Dados pessoais atualizados pelo próprio operador.")
+                        st.success("Dados pessoais atualizados com sucesso!")
+                        st.rerun()
+
+        with p_tab2:
+            st.markdown("#### Modificar Meu E-mail Institucional (`@ufpe.br`)")
+            with st.form("form_trocar_proprio_email"):
+                em_novo = st.text_input("Novo E-mail Institucional (@ufpe.br)", value=email_atu, key="pf_novo_email").strip().lower()
+                em_conf = st.text_input("Confirmar Novo E-mail (@ufpe.br)", value=email_atu, key="pf_conf_email").strip().lower()
+                senha_conf_em = st.text_input("Digite sua Senha Atual para Confirmar", type="password", key="pf_senha_conf_em")
+
+                if st.form_submit_button("Atualizar Meu E-mail", type="primary"):
+                    if not check_hashes(senha_conf_em, hash_senha_atu):
+                        st.error("Senha atual incorreta.")
+                    elif em_novo != em_conf:
+                        st.error("Os e-mails digitados não coincidem.")
+                    elif not em_novo.endswith("@ufpe.br"):
+                        st.error("O novo e-mail deve pertencer obrigatoriamente ao domínio '@ufpe.br'.")
+                    else:
+                        em_em_uso = fetch_one(
+                            "SELECT username FROM hpb_usuarios WHERE LOWER(email) = :e AND username != :u",
+                            {"e": em_novo, "u": u_logado},
+                        )
+                        if em_em_uso:
+                            st.error("Este e-mail '@ufpe.br' já está vinculado a outro membro da equipe.")
+                        else:
+                            run_sql(
+                                "UPDATE hpb_usuarios SET email = :e WHERE username = :u",
+                                {"e": em_novo, "u": u_logado},
+                            )
+                            st.session_state.email_ufpe = em_novo
+                            log_audit("Alteração de E-mail Próprio", u_logado, f"E-mail alterado para {em_novo}.")
+                            st.success(f"Seu e-mail foi atualizado para `{em_novo}`!")
+                            st.rerun()
+
+        with p_tab3:
+            st.markdown("#### Modificar Minha Senha de Acesso")
+            with st.form("form_trocar_propria_senha"):
+                s_atual = st.text_input("Senha Atual", type="password", key="pf_s_atual")
+                s_nova = st.text_input("Nova Senha (mínimo 6 caracteres)", type="password", key="pf_s_nova")
+                s_nova_conf = st.text_input("Confirmar Nova Senha", type="password", key="pf_s_nova_conf")
+
+                if st.form_submit_button("Atualizar Minha Senha", type="primary"):
+                    if not check_hashes(s_atual, hash_senha_atu):
+                        st.error("A senha atual informada está incorreta.")
+                    elif len(s_nova) < 6:
+                        st.error("A nova senha deve ter pelo menos 6 caracteres.")
+                    elif s_nova != s_nova_conf:
+                        st.error("A confirmação da nova senha não confere.")
+                    else:
+                        novo_hash_s = make_hashes(s_nova)
+                        run_sql(
+                            "UPDATE hpb_usuarios SET password_hash = :p WHERE username = :u",
+                            {"p": novo_hash_s, "u": u_logado},
+                        )
+                        log_audit("Alteração de Senha Própria", u_logado, "Operador alterou a própria senha de acesso.")
+                        st.success("Sua senha foi alterada com sucesso!")
