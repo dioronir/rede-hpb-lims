@@ -652,7 +652,7 @@ if "db_hpb_v5_initialized" not in st.session_state:
     _seed_membro("qualidade.hpb", "Controle de Qualidade e Auditoria Rede HPB", "Quali@HPB2026", "qualidade.hpb@ufpe.br", "(81) 2126-8588", "Controle_Qualidade")
     _seed_membro("bioinfo.hpb", "Bioinformata Rede HPB / NUPIT", "Bio@HPB2026", "bioinformatica.hpb@ufpe.br", "(81) 2126-8588", "Bioinformata")
     _seed_membro("agenda_hpb", "Coordenação de Agenda Cirúrgica Rede HPB", "Agenda@HPB2026", "agenda.hpb@ufpe.br", "(81) 2126-8588", "Agenda_HPB")
-    _seed_membro("claudio.cordeiro", "Cláudio Leandro Cordeiro da Silva Junior", "Rede@HPB2026", "claudio.cjunior@ufpe.br "81 99882-7297", "Bioinformata")
+    _seed_membro("claudio.cordeiro", "Cláudio Leandro Cordeiro da Silva Junior", "Rede@HPB2026", "claudio.cjunior@ufpe.br", "(81) 99882-7297", "Bioinformata")
     _seed_membro("jessica.winely", "Jéssica Winely Batista da Silva", "Rede@HPB2026", "jessica.winely@ufpe.br", "(81) 98166-0726", "Controle_Qualidade")
     _seed_membro("barbara.andrade", "Bárbara Fernanda Pessoa de Andrade", "Rede@HPB2026", "barbara.andrade@ufpe.br", "(81) 98956-9873", "Coletor")
     _seed_membro("cecilia.silva", "Cecília Evellyn da Silva", "Rede@HPB2026", "cecilia.evellyn@ufpe.br", "(81) 99801-0673", "Coletor")
