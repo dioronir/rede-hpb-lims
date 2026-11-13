@@ -2189,14 +2189,14 @@ else:
     with top_c2:
         st.markdown(f"**Interface Ativa:** `{st.session_state.modulo_hpb_ativo}`")
     with top_c3:
-    av_top = obter_avatar_html_operador(st.session_state.username, tamanho_px=38, borda_cor="#10b981")
-    st.markdown(
-        f"<div style='display:flex; justify-content:flex-end; align-items:center; gap:10px;'>"
-        f"<div style='text-align:right;'><b>{st.session_state.nome_usuario}</b><br>"
-        f"<span style='font-size:11.5px; color:#64748b;'>{st.session_state.get('email_ufpe', '')} • <code>{role_atual}</code></span></div>"
-        f"<div>{av_top}</div></div>",
-        unsafe_allow_html=True,
-    )
+        av_top = obter_avatar_html_operador(st.session_state.username, tamanho_px=38, borda_cor="#10b981")
+        st.markdown(
+            f"<div style='display:flex; justify-content:flex-end; align-items:center; gap:10px;'>"
+            f"<div style='text-align:right;'><b>{st.session_state.nome_usuario}</b><br>"
+            f"<span style='font-size:11.5px; color:#64748b;'>{st.session_state.get('email_ufpe', '')} • <code>{role_atual}</code></span></div>"
+            f"<div>{av_top}</div></div>",
+            unsafe_allow_html=True,
+        )
 
     st.divider()
     modulo_ativo = st.session_state.modulo_hpb_ativo
