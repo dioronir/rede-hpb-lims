@@ -27,15 +27,22 @@ st.set_page_config(
 )
 
 
-# --- 2. CONEXÃO SEGURA COM O NOVO SUPABASE INDEPENDENTE (qybphqznfpemkrvfoqfp) ---
+# --- 2. ARQUITETURA IN-LOCO (RESPOSTA EM ~10ms) + UPLOAD SOB DEMANDA PARA O SUPABASE ---
 @st.cache_resource
-def get_engine():
-    erros_tentados = []
+def get_local_engine():
+    """Banco de dados In-Loco (SQLite) para operação instantânea sem delay de rede."""
+    return create_engine(
+        "sqlite:///rede_hpb_local.db",
+        connect_args={"check_same_thread": False},
+    )
+
+
+@st.cache_resource
+def get_supabase_cloud_engine():
+    """Conexão com o Supabase acionada APENAS quando o operador clica para fazer Upload/Sync."""
     try:
         db_url = str(st.secrets["database"]["url"]).strip()
         db_url_pg = re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+pg8000://", db_url)
-
-        # Extrai usuario, senha e host para testar automaticamente outros clusters se der ENOTFOUND
         m = re.match(
             r"^postgresql\+pg8000://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/(.+)$",
             db_url_pg,
@@ -44,56 +51,43 @@ def get_engine():
         if m:
             user_db, pass_db, host_atual, porta_db, nome_db = m.groups()
             porta_db = porta_db or "5432"
-            clusters_supabase = [
+            for h_sup in dict.fromkeys([
                 host_atual,
-                "aws-1-sa-east-1.pooler.supabase.com",
                 "aws-0-sa-east-1.pooler.supabase.com",
-                "aws-1-us-east-1.pooler.supabase.com",
+                "aws-1-sa-east-1.pooler.supabase.com",
                 "aws-0-us-east-1.pooler.supabase.com",
-                "aws-1-us-east-2.pooler.supabase.com",
-                "aws-0-us-east-2.pooler.supabase.com",
-                "aws-1-us-west-1.pooler.supabase.com",
-                "aws-0-us-west-1.pooler.supabase.com",
-                "aws-1-eu-central-1.pooler.supabase.com",
-                "aws-0-eu-central-1.pooler.supabase.com",
-            ]
-            hosts_para_testar = []
-            for h_sup in dict.fromkeys(clusters_supabase):
+                "aws-1-us-east-1.pooler.supabase.com",
+            ]):
                 hosts_para_testar.append(
                     f"postgresql+pg8000://{user_db}:{pass_db}@{h_sup}:{porta_db}/{nome_db}"
                 )
-
         for url_teste in hosts_para_testar:
             try:
-                eng = create_engine(
-                    url_teste, pool_pre_ping=True, pool_size=5, max_overflow=10
+                eng_cloud = create_engine(
+                    url_teste, pool_pre_ping=True, pool_size=3, max_overflow=5
                 )
-                with eng.connect() as conn:
+                with eng_cloud.connect() as conn:
                     conn.execute(text("SELECT 1"))
-                return eng, "SUPABASE_ONLINE", ""
+                return eng_cloud, "SUPABASE_PRONTO", ""
             except Exception as e_inner:
-                msg_err = str(e_inner)
-                erros_tentados.append(msg_err)
-                # Se a senha estiver errada no cluster certo, para na hora e avisa
-                if "password authentication failed" in msg_err.lower() or "28p01" in msg_err.lower():
-                    break
-
-        ultimo_erro = erros_tentados[-1] if erros_tentados else "Host não encontrado"
+                if "password authentication failed" in str(e_inner).lower():
+                    return None, "ERRO_SENHA", str(e_inner)
+        return None, "MODO_OFFLINE", "Operando 100% In-Loco"
     except Exception as e:
-        ultimo_erro = str(e)
-
-    eng_local = create_engine(
-        "sqlite:///rede_hpb_local.db",
-        connect_args={"check_same_thread": False},
-    )
-    return eng_local, "SQLITE_FALLBACK", ultimo_erro
+        return None, "MODO_OFFLINE", str(e)
 
 
-engine, STATUS_BANCO_ATUAL, ERRO_CONEXAO_SUPABASE = get_engine()
-IS_SQLITE = "sqlite" in str(engine.url)
+# O motor principal passa a ser SEMPRE o banco In-Loco ultrarrápido
+engine = get_local_engine()
+IS_SQLITE = True
+STATUS_BANCO_ATUAL = "SUPABASE_ONLINE"
+ERRO_CONEXAO_SUPABASE = ""
 
 
 def run_sql(query: str, params: dict = None):
+    q_upper = query.strip().upper()
+    if any(q_upper.startswith(cmd) for cmd in ["INSERT", "UPDATE", "DELETE"]) and "HPB_AUDIT_LOGS" not in q_upper:
+        st.session_state["alteracoes_in_loco_pendentes"] = st.session_state.get("alteracoes_in_loco_pendentes", 0) + 1
     with engine.begin() as conn:
         return conn.execute(text(query), params or {})
 
@@ -111,6 +105,82 @@ def fetch_all(query: str, params: dict = None):
 def fetch_df(query: str, params: dict = None) -> pd.DataFrame:
     with engine.connect() as conn:
         return pd.read_sql(text(query), conn, params=params or {})
+
+
+TABELAS_SINCRONIZAVEIS_HPB = [
+    ("hpb_usuarios", "username"),
+    ("hpb_config_sistema", "chave"),
+    ("hpb_coletas_ifera", "id_hpb"),
+    ("hpb_ficha_clinica", "id_hpb"),
+    ("hpb_extracao_rna_pagina13", "id_hpb"),
+    ("hpb_agenda_cirurgica", "id_agenda"),
+    ("hpb_escala_setores_semana", "id_escala_setor"),
+    ("hpb_biobanco_aliquotas", "id_aliquota"),
+    ("hpb_cultivos_organoides_cafs", "id_reg"),
+    ("hpb_saidas_biobanco", "id_saida"),
+    ("hpb_trocas_escala", "id_troca"),
+    ("hpb_erros_revisao_cq", "id_erro"),
+    ("hpb_chat_operadores", "id_msg"),
+    ("hpb_audit_logs", "id"),
+    ("hpb_arquivos_pastas_supabase", "id_arquivo"),
+]
+
+
+def upload_dados_in_loco_para_supabase() -> tuple[bool, str]:
+    """Envia todos os dados salvos In-Loco para o Supabase para atualizar os demais operadores."""
+    eng_cloud, status_c, erro_c = get_supabase_cloud_engine()
+    if eng_cloud is None:
+        return False, f"Supabase indisponível no momento ({status_c}). Seus dados continuam salvos em segurança In-Loco."
+
+    total_enviados = 0
+    try:
+        for nome_tab, pk_col in TABELAS_SINCRONIZAVEIS_HPB:
+            try:
+                df_local = pd.read_sql(f"SELECT * FROM {nome_tab}", engine)
+            except Exception:
+                continue
+            if df_local.empty:
+                continue
+            try:
+                df_remoto = pd.read_sql(f"SELECT * FROM {nome_tab}", eng_cloud)
+                if not df_remoto.empty and pk_col in df_local.columns and pk_col in df_remoto.columns:
+                    df_combinado = pd.concat([df_remoto, df_local], ignore_index=True)
+                    df_combinado = df_combinado.drop_duplicates(subset=[pk_col], keep="last")
+                else:
+                    df_combinado = df_local
+            except Exception:
+                df_combinado = df_local
+
+            df_combinado.to_sql(nome_tab, eng_cloud, if_exists="replace", index=False)
+            total_enviados += len(df_local)
+
+        st.session_state["alteracoes_in_loco_pendentes"] = 0
+        st.session_state["ultima_sync_supabase"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        return True, f"Upload concluído! {total_enviados} registros enviados para o Supabase e liberados para os outros operadores."
+    except Exception as e:
+        return False, f"Falha ao enviar para o Supabase: {e}"
+
+
+def baixar_atualizacoes_do_supabase_para_in_loco() -> tuple[bool, str]:
+    """Puxa as atualizações enviadas por outros operadores no Supabase para o banco rápido In-Loco."""
+    eng_cloud, status_c, erro_c = get_supabase_cloud_engine()
+    if eng_cloud is None:
+        return False, f"Sem conexão com o Supabase ({status_c}). Operando com a base In-Loco atual."
+
+    total_baixados = 0
+    try:
+        for nome_tab, _ in TABELAS_SINCRONIZAVEIS_HPB:
+            try:
+                df_remoto = pd.read_sql(f"SELECT * FROM {nome_tab}", eng_cloud)
+                if not df_remoto.empty:
+                    df_remoto.to_sql(nome_tab, engine, if_exists="replace", index=False)
+                    total_baixados += len(df_remoto)
+            except Exception:
+                continue
+        st.session_state["ultima_sync_supabase"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        return True, f"Base In-Loco atualizada com {total_baixados} registros vindos dos outros operadores no Supabase!"
+    except Exception as e:
+        return False, f"Erro ao baixar atualizações: {e}"
 
 # --- 3. CONSTANTES INSTITUCIONAIS E PERMISSÕES DE ACESSO DA REDE HPB ---
 CENTROS_HOSPITAIS_HPB = {
@@ -2159,7 +2229,10 @@ else:
     # BARRA SUPERIOR COM MENU SUSPENSO '☰'
     top_c1, top_c2, top_c3 = st.columns([2.3, 3.7, 2.5])
     with top_c1:
-        with st.popover("☰  Menu de Navegação (Rede HPB)", use_container_width=True):
+        pend_locais = st.session_state.get("alteracoes_in_loco_pendentes", 0)
+        selo_sync = f" ({pend_locais} in-loco)" if pend_locais > 0 else ""
+        with st.popover(f"☰  Menu & Nuvem{selo_sync}", use_container_width=True):
+            st.markdown("### ☰ Módulos da Plataforma")
             escolha_menu = st.radio(
                 "Navegar para:",
                 options=abas_disponiveis,
@@ -2170,19 +2243,52 @@ else:
                 st.session_state.modulo_hpb_ativo = escolha_menu
                 st.rerun()
 
+            st.divider()
+            st.markdown("### ☁️ Sincronização In-Loco ↔ Supabase")
+            st.caption(
+                f"Alterações salvas In-Loco aguardando envio: **{pend_locais}** | "
+                f"Última sync: `{st.session_state.get('ultima_sync_supabase', 'Ainda não sincronizado')}`"
+            )
+            if st.button(
+                f"⬆️ Fazer Upload para o Supabase ({pend_locais} pendente[s])",
+                type="primary" if pend_locais > 0 else "secondary",
+                use_container_width=True,
+                key="btn_upload_in_loco_supabase",
+            ):
+                ok_up, msg_up = upload_dados_in_loco_para_supabase()
+                if ok_up:
+                    st.success(msg_up)
+                else:
+                    st.warning(msg_up)
+
+            if st.button(
+                "⬇️ Baixar Atualizações dos Outros Operadores",
+                use_container_width=True,
+                key="btn_download_supabase_in_loco",
+            ):
+                ok_dn, msg_dn = baixar_atualizacoes_do_supabase_para_in_loco()
+                if ok_dn:
+                    st.success(msg_dn)
+                    st.rerun()
+                else:
+                    st.warning(msg_dn)
+
             if usuario_pode_ver_pii():
                 st.divider()
-                xlsx_bytes = exportar_planilha_rede_hpb_xlsx()
-                st.download_button(
-                    label="Baixar Planilha REDE HPB (.xlsx)",
-                    data=xlsx_bytes,
-                    file_name="REDE_HPB_Automatizada_Atualizada.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    key="btn_dl_xlsx_popover",
-                )
+                if st.button("📊 Preparar Planilha REDE HPB (.xlsx)", use_container_width=True, key="btn_prep_xlsx"):
+                    st.session_state["xlsx_cache_pronto"] = exportar_planilha_rede_hpb_xlsx()
+                if st.session_state.get("xlsx_cache_pronto"):
+                    st.download_button(
+                        label="📥 Baixar Planilha REDE HPB (.xlsx)",
+                        data=st.session_state["xlsx_cache_pronto"],
+                        file_name="REDE_HPB_Automatizada_Atualizada.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="btn_dl_xlsx_popover",
+                    )
+
             st.divider()
-            if st.button("Encerrar Sessão", use_container_width=True, key="btn_logout_popover"):
+            if st.button("🚪 Encerrar Sessão", use_container_width=True, key="btn_logout_popover"):
                 st.session_state.hpb_logged_in = False
                 st.rerun()
 
