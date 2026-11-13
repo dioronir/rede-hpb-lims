@@ -21,15 +21,19 @@ st.set_page_config(
 )
 
 
-# --- 2. CONEXÃO SEGURA COM O BANCO DE DADOS (SUPABASE POSTGRESQL OU SQLITE LOCAL) ---
+# --- 2. CONEXÃO SEGURA COM O BANCO DE DADOS (SUPABASE POSTGRESQL OU SQLITE AUTOMÁTICO) ---
 @st.cache_resource
 def get_engine():
     try:
-        db_url = st.secrets["database"]["url"]
+        db_url = str(st.secrets["database"]["url"]).strip()
         db_url = re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+pg8000://", db_url)
-        return create_engine(
+        eng = create_engine(
             db_url, pool_pre_ping=True, pool_size=5, max_overflow=10
         )
+        # Testa a conexão real aqui dentro: se o Supabase estiver pausado, cai no except abaixo
+        with eng.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return eng
     except Exception:
         return create_engine(
             "sqlite:///rede_hpb_local.db",
@@ -39,7 +43,6 @@ def get_engine():
 
 engine = get_engine()
 IS_SQLITE = "sqlite" in str(engine.url)
-
 
 def run_sql(query: str, params: dict = None):
     with engine.begin() as conn:
