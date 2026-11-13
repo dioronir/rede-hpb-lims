@@ -30,21 +30,63 @@ st.set_page_config(
 # --- 2. CONEXÃO SEGURA COM O NOVO SUPABASE INDEPENDENTE (qybphqznfpemkrvfoqfp) ---
 @st.cache_resource
 def get_engine():
+    erros_tentados = []
     try:
         db_url = str(st.secrets["database"]["url"]).strip()
-        db_url = re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+pg8000://", db_url)
-        eng = create_engine(
-            db_url, pool_pre_ping=True, pool_size=5, max_overflow=10
+        db_url_pg = re.sub(r"^postgres(ql)?(\+\w+)?://", "postgresql+pg8000://", db_url)
+
+        # Extrai usuario, senha e host para testar automaticamente outros clusters se der ENOTFOUND
+        m = re.match(
+            r"^postgresql\+pg8000://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/(.+)$",
+            db_url_pg,
         )
-        with eng.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return eng, "SUPABASE_ONLINE", ""
+        hosts_para_testar = [db_url_pg]
+        if m:
+            user_db, pass_db, host_atual, porta_db, nome_db = m.groups()
+            porta_db = porta_db or "5432"
+            clusters_supabase = [
+                host_atual,
+                "aws-1-sa-east-1.pooler.supabase.com",
+                "aws-0-sa-east-1.pooler.supabase.com",
+                "aws-1-us-east-1.pooler.supabase.com",
+                "aws-0-us-east-1.pooler.supabase.com",
+                "aws-1-us-east-2.pooler.supabase.com",
+                "aws-0-us-east-2.pooler.supabase.com",
+                "aws-1-us-west-1.pooler.supabase.com",
+                "aws-0-us-west-1.pooler.supabase.com",
+                "aws-1-eu-central-1.pooler.supabase.com",
+                "aws-0-eu-central-1.pooler.supabase.com",
+            ]
+            hosts_para_testar = []
+            for h_sup in dict.fromkeys(clusters_supabase):
+                hosts_para_testar.append(
+                    f"postgresql+pg8000://{user_db}:{pass_db}@{h_sup}:{porta_db}/{nome_db}"
+                )
+
+        for url_teste in hosts_para_testar:
+            try:
+                eng = create_engine(
+                    url_teste, pool_pre_ping=True, pool_size=5, max_overflow=10
+                )
+                with eng.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                return eng, "SUPABASE_ONLINE", ""
+            except Exception as e_inner:
+                msg_err = str(e_inner)
+                erros_tentados.append(msg_err)
+                # Se a senha estiver errada no cluster certo, para na hora e avisa
+                if "password authentication failed" in msg_err.lower() or "28p01" in msg_err.lower():
+                    break
+
+        ultimo_erro = erros_tentados[-1] if erros_tentados else "Host não encontrado"
     except Exception as e:
-        eng_local = create_engine(
-            "sqlite:///rede_hpb_local.db",
-            connect_args={"check_same_thread": False},
-        )
-        return eng_local, "SQLITE_FALLBACK", str(e)
+        ultimo_erro = str(e)
+
+    eng_local = create_engine(
+        "sqlite:///rede_hpb_local.db",
+        connect_args={"check_same_thread": False},
+    )
+    return eng_local, "SQLITE_FALLBACK", ultimo_erro
 
 
 engine, STATUS_BANCO_ATUAL, ERRO_CONEXAO_SUPABASE = get_engine()
